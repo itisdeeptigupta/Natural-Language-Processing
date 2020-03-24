@@ -1,0 +1,264 @@
+---
+title: 'Part of Speech Tagging Assignment'
+author: "Deepti Gupta"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#do not change this
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Libraries / R Setup
+
+- In this section, include the libraries you need for the *R* questions.  
+
+```{r}
+##r chunk
+
+library(reticulate)
+
+#devtools::install_github("bradleyboehmke/harrypotter")
+library(harrypotter)
+
+
+#devtools::install_github("trinker/termco")
+#devtools::install_github("trinker/coreNLPsetup")
+#devtools::install_github("trinker/tagger")
+#install.packages("qdap")
+#install.packages("rJava")
+#devtools::install_github("bnosac/RDRPOSTagger")
+
+library(rJava)
+library(tagger)
+library(dplyr)
+
+library(RDRPOSTagger)
+
+##pick one of the harrypotter books to analyze with your POS text
+##https://github.com/bradleyboehmke/harrypotter check out the options
+##load it using data(book title)
+
+data("half_blood_prince")
+head(half_blood_prince)
+
+```
+
+- In this section, include import functions to load the packages you will use for Python.
+- Also transfer your `book_data` from R into Python.  
+
+```{python}
+##python chunk
+
+import spacy
+nlp = spacy.load("C:\Program Files\Python38\Lib\site-packages\en_core_web_sm\en_core_web_sm-2.2.0")
+
+import pandas as pd
+import nltk
+from nltk.corpus import brown
+
+py_book_data = r.half_blood_prince[1]
+py_book_data
+
+```
+
+## Tagger Package
+
+- Use the `tagger` package to tag your chosen book and print out the first chapter only (i.e., row 1 of the book you chose). 
+- Use something like `(book[1])[[1]][1:10]` to print out the first few tags. 
+- Use the universal tag set and plot options to see what the most common parts of speech are for your chapter.
+- What are the top two most common parts of speech? 
+
+```{r}
+##r chunk
+
+rdata_tag = tag_pos(half_blood_prince[1])  
+rdata_tag
+
+Tag_Desc = penn_tags()  # helps to understand the tag with a description
+
+#Print out the first few tags
+rdata_tag[1][[1]][10:30]
+
+#Plot to see the most common parts of speech in the chapter
+tag_pos(half_blood_prince[1])%>%plot()
+
+# The two most common part of speech are NN and IN
+# From the description, NN refers to "noun, common, singular or mass"
+# and IN refers to "preposition or conjunction, subordinating"
+
+
+```
+
+## RDR POS Tagger
+
+- Create an English language model that tags for part of speech.
+- Tag your first book chapter for part of speech. 
+- Use something like `head(...(book[1]))` to print out the first few examples. 
+
+```{r}
+##r chunk
+
+# English Model that creates POS
+create_pos_tagger <- rdr_model(language = "English", annotation = "POS")
+create_pos_tagger
+
+
+rdr_pos_tagging = rdr_pos(create_pos_tagger, x = half_blood_prince[1])
+
+head(rdr_pos_tagging, 15)
+# The first 15 tokens are correct distinguishing between verbs, nouns, connectors, pronouns and determinants
+
+```
+
+## spaCy
+
+- Import spacy and the English language module.
+- Tag the first chapter of your book using spacy, and print out the results. 
+- Use the `pandas` option at the beginning of the lecture to print out only a few rows. 
+
+```{python}
+##python chunk
+
+#Spacy imported in the first python section
+
+#Tagging the "half blood prince" 
+py_pos_tagged = nlp(py_book_data)
+
+#Printing the first 10 results, remove the slicing to print all
+for word in py_pos_tagged[:10]:
+  print(word.text, word.pos_, word.tag_)
+
+#Use pandas to print few rows
+py_pos_tagged = [(word, word.tag_, word.pos_) for word in nlp(py_book_data[:50])]
+pd.DataFrame(py_pos_tagged).T
+```
+
+
+## Training your own tagger
+
+- Create a Default tagger in Python using `nltk`. 
+- The default option should be "NN" for nouns.
+- You do not have to use the tagger yet, just create it for a combined tagger to use later. (Don't tag! Don't print it out!)
+
+```{python}
+##python chunk
+
+Tag0 = nltk.DefaultTagger('NN')   #default tag for nouns is NN
+
+```
+
+## Unigram Tagger 
+
+- Create a unigram tagger that is trained on the entire Brown corpus with tagged sentences. 
+  - Import the Brown corpus.
+  - Split the data into test and train. 
+  - Train your unigram tagger on the training sentences.
+  - Use the default tagger you created above as the backoff. 
+  - Do not use the tagger here, just train it. 
+
+```{python}
+##python chunk
+
+# brown corpus downloaded in the first python section
+#nltk.download('brown')
+
+## creating a unigram tagger 
+py_brown_tagged_sents = brown.tagged_sents()
+unigram_tagger = nltk.UnigramTagger(py_brown_tagged_sents )
+
+# Split into test and train
+size = int(len(py_brown_tagged_sents)*0.80)
+py_train_sent = py_brown_tagged_sents[:size]
+py_test_sent = py_brown_tagged_sents[size:]
+
+# Train the unigram tagger on training data
+unigram_tagger1 = nltk.UnigramTagger(py_train_sent)
+
+# Training the unigram tagger as the backoff
+Tag1 = nltk.UnigramTagger(py_train_sent, backoff = Tag0)
+Tag2 = nltk.BigramTagger(py_train_sent, backoff = Tag1)
+
+```
+
+## Evaluate
+
+- Use the `.evaluate` function on your testing data to determine the accuracy of your tagger. 
+
+```{python}
+##python chunk
+
+unigram_tagger1.evaluate(py_test_sent)      #0.8773
+
+Tag0.evaluate(py_test_sent)                 #0.1099
+Tag1.evaluate(py_test_sent)                 #0.8843
+Tag2.evaluate(py_test_sent)                 #0.9068
+
+```
+
+## Apply to Harry Potter
+
+- Use the tagger you created above to apply to the first chapter of your Harry Potter book.
+- Hint: save your book as only the first chapter and then transfer to python to help make this shorter. 
+- Second hint: be sure to tokenize the data first!
+- Use something like `tagger.tag(book)[1:10]` to print out only the first ten tags. 
+
+```{python}
+##python chunk
+
+# "py_book_data" already contins first chapter
+
+# tokenize
+# hbp : half blood prince
+py_hbp_tokens = nltk.word_tokenize(py_book_data)
+
+# Tagging with Unigram Tagger without Backoff
+print ("Tagging with Unigram Tagger without Backoff")
+Tag0.tag(py_hbp_tokens)[1:20]
+
+
+# Tagging with Unigram Tagger with Backoff
+print ("\n\nTagging with Unigram Tagger with Backoff")
+Tag1.tag(py_hbp_tokens)[1:20]
+
+
+# Tagging with Bigram Tagger with Backoff
+print ("\n\nTagging with Bigram Tagger with Backoff")
+Tag0.tag(py_hbp_tokens)[1:20]
+
+```
+
+## Compare Results
+
+
+
+### Examine the output from the different taggers we used to tag Harry Potter. 
+
+R Taggers
+
+- tag_pos : tags 45 different parts of speech
+
+- rdr_pos : creates an english language model and then tags part of speech
+
+Python Taggers
+
+- spacy nlp : just like R taggers, it also assigns grammatical properties to the words like nouns, adverbs etc  
+
+- nltk.UnigramTagger : tags the part of speech using the brown corpus (doesn't take the ordering in context)
+
+- nltk.BigramTagger : uses the brown corpus but care about the order of the words, so it considers the context of each word by analyzing it by pairs
+
+### Are there any immediate differences you can notice when tagging?
+
+Spacy provides descriptions of the tags under pos_ which is quite helpful in analysis
+unigram and bigram taggers tagged chilly as adverbs and nouns differently. The efficiency is better with backoff.
+
+
+### Which tagger seems like the easiest to apply?
+
+I think all of them are easier to apply.
+
+### Why might the Brown corpus not be very good at tagging Harry Potter books? 
+
+Because the brown corpus was compiled in 1960s and not very familiar with modern day linguistics
